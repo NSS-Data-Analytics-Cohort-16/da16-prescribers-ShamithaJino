@@ -6,7 +6,8 @@
 	
 	SELECT 
 		npi, 
-		SUM(total_claim_count) AS total_claim FROM prescription
+		SUM(total_claim_count) AS total_claim 
+	FROM prescription
 	GROUP BY npi
 	ORDER BY total_claim DESC
 
@@ -48,7 +49,7 @@
 	SELECT 
 		specialty_description,
 		SUM(total_claim_count) AS total_claim
-		FROM prescriber AS pr
+	FROM prescriber AS pr
 	LEFT JOIN prescription AS pn
 	ON pr.npi=pn.npi
 	LEFT JOIN drug AS d
@@ -60,78 +61,45 @@
 	
 	-- c. Challenge Question: Are there any specialties that appear in the prescriber table 
 	--that have no associated prescriptions in the prescription table?
-	SELECT 
-		pr.specialty_description, 
-		COUNT(pr.specialty_description) AS count_not_associated
-	FROM prescriber AS pr
-	LEFT JOIN prescription AS pn
-	USING(npi)
-	WHERE pr.specialty_description IS NOT NULL 
-		AND pn.total_claim_count IS NULL
-	GROUP BY pr.specialty_description
+	
 
-	select 
+	SELECT 
 		pr.specialty_description,
-		count(pr.npi) 
-	from prescriber as pr
-	left join prescription as pn 
-	using(npi)
-	WHERE pn.npi is null
-	GROUP BY pr.specialty_description
-
-	SELECT 
-		pr.specialty_description, 
-		COUNT(pr.specialty_description) AS count_not_associated
+		COUNT(pr.npi) AS total_count
 	FROM prescriber AS pr
-	LEFT JOIN prescription AS pn
+	LEFT JOIN prescription AS pn 
 	USING(npi)
-	WHERE 
-		 pn.total_claim_count IS NULL
+	WHERE pn.npi IS NULL
 	GROUP BY pr.specialty_description
+	ORDER BY total_count DESC
+
 	
 	-- d. Difficult Bonus: Do not attempt until you have solved all other problems! 
 	--For each specialty, report the percentage of total claims by that specialty which are for opioids. 
 	--Which specialties have a high percentage of opioids?
 	
 	SELECT 
-		subq.specialty_description, 
-		SUM(subq.total_claim_count)/SUM(total_claim_count)
-	FROM
-		(
-		SELECT specialty_description, SUM(total_claim_count) AS total_count FROM prescription AS pn
-		LEFT JOIN prescriber AS pr
-		USING(npi)
-		GROUP BY specialty_description
-		) AS subq
-	LEFT JOIN prescriber AS pre
-	ON subq.specialty_description=pre.specialty_description
-	LEFT JOIN prescription AS prs
-	ON prs.npi=pre.npi
-	GROUP BY subq.specialty_description
-
-
-	SELECT 
-		specialty_description,
-		(SUM(total_claim_count)/(select SUM(total_claim_count) from prescription)) *100
-	FROM prescriber AS pr
-	LEFT JOIN prescription AS pn
-	USING(npi)
-	LEFT JOIN drug AS d
-	ON d.drug_name = pn.drug_name
-	WHERE opioid_drug_flag='Y'
-	GROUP BY specialty_description
+		pr.specialty_description,
+	
+		((SELECT  total_claim_count) AS total_count FROM prescription AS pn
+		LEFT JOIN drug AS d
+		USING(drug_name)
+		WHERE opioid_drug_flag='Y')*100/SUM(total_claim_count)) AS percent_opioids
+	FROM prescriber pr
+	LEFT JOIN prescription AS pre
+	ON pr.npi=pre.npi
+	GROUP BY pr.specialty_description
 
 	
 -- 3.	
 	-- a. Which drug (generic_name) had the highest total drug cost?
 	SELECT 
-		d.generic_name,
-		--d.drug_name,
+		d.generic_name,		
 		SUM(total_drug_cost) AS total_cost
 	FROM prescription AS pn
 	LEFT JOIN drug AS d
 	ON d.drug_name = pn.drug_name
-	GROUP BY  d.generic_name
+	GROUP BY d.generic_name 
 	ORDER BY total_cost DESC
 	LIMIT 10;
 	
@@ -145,9 +113,8 @@
 	ON d.drug_name = pn.drug_name
 	GROUP BY generic_name
 	ORDER BY total_cost_perday DESC
-	LIMIT 5;
-select * from prescription
-	
+	LIMIT 10;
+
 	--Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.
 	
 -- 4.	
@@ -184,42 +151,62 @@ select * from prescription
 
 select * from cbsa
 select * from population
+
 -- 5.	
 	-- a. How many CBSAs are in Tennessee? Warning: The cbsa table contains information for all states, not just Tennessee.
 	
-	select cbsa,count(*) from cbsa
-	where cbsaname like '%TN%'
-	group by cbsa,cbsaname
+	select 
+ 		count(cbsa) 
+	from cbsa
+	where cbsaname like '%TN'   
+	
 	
 	-- b. Which cbsa has the largest combined population? Which has the smallest? Report the CBSA name and total population.
 
-SELECT 
-        c.cbsaname,
-        SUM(p.population) AS total_population
-FROM population AS p
-LEFT JOIN cbsa AS c
-USING(fipscounty)
-GROUP BY c.cbsaname
-ORDER BY total_population DESC
+	SELECT 
+	        c.cbsaname,
+	        SUM(p.population) AS total_population
+	FROM population AS p
+	LEFT JOIN cbsa AS c
+	USING(fipscounty)
+	GROUP BY c.cbsaname
+	ORDER BY total_population DESC
+
+
+	with cbsa_population AS (
+	
+	SELECT
+			c.cbsaname AS cbsaname,
+	        SUM(p.population) AS total_population
+	FROM population AS p
+	LEFT JOIN cbsa AS c
+	USING(fipscounty)
+	GROUP BY c.cbsaname
+	ORDER BY total_population DESC
+	)
 		
 	-- c. What is the largest (in terms of population) county which is not included in a CBSA? Report the county name and population.
 
-SELECT county, SUM(population) AS total_population
-FROM population AS p
-LEFT JOIN fips_county AS f
-USING(fipscounty)
-GROUP BY county
-ORDER BY total_population DESC
+	SELECT 
+		county, 
+		SUM(population) AS total_population
+	FROM population AS p
+	LEFT JOIN fips_county AS f
+	USING(fipscounty)
+	LEFT JOIN cbsa AS c
+	on f.fipscounty = c.fipscounty
+	WHERE c.fipscounty IS NULL
+	GROUP BY county
+	ORDER BY total_population DESC
 
 	
 -- 6.	
 	-- a. Find all rows in the prescription table where total_claims is at least 3000. Report the drug_name and the total_claim_count.
 	SELECT 
 		drug_name,
-		SUM(total_claim_count) AS total_claim_count
+		total_claim_count
 	FROM prescription
-	GROUP BY drug_name
-	HAVING SUM(total_claim_count)>=3000
+	WHERE total_claim_count>=3000
 	
 	-- b. For each instance that you found in part a, add a column that indicates whether the drug is an opioid.
 
@@ -227,14 +214,14 @@ ORDER BY total_population DESC
 		p.drug_name,
 		CASE
 			WHEN opioid_drug_flag ='Y' THEN 'opioid'
-			WHEN opioid_drug_flag ='N' THEN 'not opioid'
+			WHEN opioid_drug_flag ='N' THEN 'non opioid'
 		END AS opioid_status,
-		SUM(total_claim_count) AS total_claim_count
+		total_claim_count 
 	FROM prescription AS p
 	LEFT JOIN drug AS d
 	USING(drug_name)
-	GROUP BY p.drug_name, opioid_status
-	HAVING SUM(total_claim_count)>=3000
+	WHERE total_claim_count>=3000
+	
 	
 	-- c. Add another column to you answer from the previous part which gives the prescriber first and last name associated with each row.
 	
@@ -246,36 +233,70 @@ ORDER BY total_population DESC
 			WHEN opioid_drug_flag ='Y' THEN 'opioid'
 			WHEN opioid_drug_flag ='N' THEN 'not opioid'
 		END AS opioid_status,
-		SUM(total_claim_count) AS total_claim_count
+		total_claim_count
 	FROM prescription AS p
 	LEFT JOIN drug AS d
 	USING(drug_name)
 	LEFT JOIN prescriber AS pr
 	ON pr.npi =p.npi
-	GROUP BY 
-		p.drug_name, 
-		opioid_status, 
-		prescriber_first_name,
-		prescriber_last_name
-	HAVING SUM(total_claim_count)>=3000
+	WHERE total_claim_count>=3000
 	
 -- 7.	
-	-- The goal of this exercise is to generate a full list of all pain management specialists in Nashville and the number of claims they had for each opioid. Hint: The results from all 3 parts will have 637 rows.
+	-- The goal of this exercise is to generate a full list of all pain management specialists in Nashville 
+	--and the number of claims they had for each opioid. Hint: The results from all 3 parts will have 637 rows.
 	
 	-- a. First, create a list of all npi/drug_name combinations for pain management specialists 
 	-- (specialty_description = 'Pain Management) in the city of Nashville (nppes_provider_city = 'NASHVILLE'),
 	-- where the drug is an opioid (opiod_drug_flag = 'Y'). Warning: Double-check your query before running it. 
 	-- You will only need to use the prescriber and drug tables since you don't need the claims numbers yet.
+	
+
+	SELECT 
+		npi, 
+		drug_name
+		
+	FROM prescriber 
+	CROSS JOIN drug 
+	WHERE nppes_provider_city ILIKE 'Nashville' 
+		AND specialty_description ILIKE 'Pain Management'
+		AND opioid_drug_flag = 'Y'
+	
 
 	
 	-- b. Next, report the number of claims per drug per prescriber. Be sure to include all combinations,
 	-- whether or not the prescriber had any claims. You should report the npi, the drug name, and the number of claims (total_claim_count).
+
 	
-	
+	SELECT 
+		pr.npi, 
+		pn.drug_name,
+		total_claim_count
+	FROM prescriber AS pr
+	CROSS JOIN drug AS d
+	LEFT JOIN prescription AS pn
+	ON pn.drug_name=d.drug_name
+	AND pn.npi=pr.npi
+	WHERE nppes_provider_city ILIKE 'Nashville' 
+		AND specialty_description ILIKE 'Pain Management'
+		AND opioid_drug_flag = 'Y'
+
+
+
 	-- c. Finally, if you have not done so already, fill in any missing values for total_claim_count with 0. 
 	--Hint - Google the COALESCE function.
 
-		
-
+	
+	SELECT 
+		pr.npi, 
+		pn.drug_name,
+		COALESCE(total_claim_count,0) AS total_claim_count
+	FROM prescriber AS pr
+	CROSS JOIN drug AS d
+	LEFT JOIN prescription AS pn
+	ON pn.drug_name=d.drug_name
+	AND pn.npi=pr.npi
+	WHERE nppes_provider_city ILIKE 'Nashville' 
+		AND specialty_description ILIKE 'Pain Management'
+		AND opioid_drug_flag = 'Y'
 
 	
