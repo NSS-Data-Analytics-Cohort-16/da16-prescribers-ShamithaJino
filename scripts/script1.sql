@@ -10,12 +10,13 @@
 	FROM prescription
 	GROUP BY npi
 	ORDER BY total_claim DESC
-
+	LIMIT 1;
 	
 	-- b. Repeat the above, but this time report the nppes_provider_first_name, nppes_provider_last_org_name,  
 	--specialty_description, and the total number of claims.
 	
 	SELECT 
+		pr.npi, 
 		nppes_provider_first_name AS first_name,
 		nppes_provider_last_org_name AS last_name,
 		specialty_description,
@@ -23,7 +24,7 @@
 	FROM prescriber AS pr
 	LEFT JOIN prescription AS pn
 	ON pr.npi=pn.npi
-	GROUP BY first_name,last_name,specialty_description
+	GROUP BY pr.npi,first_name,last_name,specialty_description
 	HAVING SUM(total_claim_count) IS NOT NULL
 	ORDER BY total_claim_count DESC;
 
@@ -69,10 +70,9 @@
 	FROM prescriber AS pr
 	LEFT JOIN prescription AS pn 
 	USING(npi)
-	WHERE pn.npi IS NULL
+	WHERE pn.drug_name IS NULL
 	GROUP BY pr.specialty_description
 	ORDER BY total_count DESC
-
 	
 	-- d. Difficult Bonus: Do not attempt until you have solved all other problems! 
 	--For each specialty, report the percentage of total claims by that specialty which are for opioids. 
@@ -81,7 +81,7 @@
 	SELECT 
 		pr.specialty_description,
 	
-		((SELECT  total_claim_count) AS total_count FROM prescription AS pn
+		((SELECT  SUM(total_claim_count) AS total_count FROM prescription AS pn
 		LEFT JOIN drug AS d
 		USING(drug_name)
 		WHERE opioid_drug_flag='Y')*100/SUM(total_claim_count)) AS percent_opioids
@@ -89,6 +89,19 @@
 	LEFT JOIN prescription AS pre
 	ON pr.npi=pre.npi
 	GROUP BY pr.specialty_description
+
+SELECT pr.specialty_description,
+	ROUND(SUM(CASE
+		WHEN opioid_drug_flag ='Y' THEN total_claim_count
+		END) *100/SUM(total_claim_count),2) AS opioid_percent
+FROM prescriber pr
+	LEFT JOIN prescription AS pn
+	ON pr.npi=pn.npi
+	LEFT JOIN drug AS d
+	ON d.drug_name= pn.drug_name 
+	GROUP BY pr.specialty_description
+	Order by opioid_percent DESC
+	
 
 	
 -- 3.	
@@ -184,6 +197,7 @@ select * from population
 	GROUP BY c.cbsaname
 	ORDER BY total_population DESC
 	)
+
 		
 	-- c. What is the largest (in terms of population) county which is not included in a CBSA? Report the county name and population.
 
